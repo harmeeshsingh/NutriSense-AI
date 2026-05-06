@@ -1,0 +1,56 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: us-central1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - id: 'auth'
+      uses: 'google-github-actions/auth@v2'
+      with:
+        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+    - name: 'Set up Cloud SDK'
+      uses: 'google-github-actions/setup-gcloud@v2'
+
+    - name: 'Configure Docker'
+      run: gcloud auth configure-docker gcr.io
+
+    - name: 'Build and Push Backend'
+      run: |
+        cd backend
+        docker build -t gcr.io/$PROJECT_ID/nutrisense-backend:latest .
+        docker push gcr.io/$PROJECT_ID/nutrisense-backend:latest
+
+    - name: 'Deploy Backend'
+      run: |
+        gcloud run deploy nutrisense-backend \
+          --image gcr.io/$PROJECT_ID/nutrisense-backend:latest \
+          --region $REGION \
+          --platform managed \
+          --allow-unauthenticated
+
+    - name: 'Build and Push Frontend'
+      run: |
+        cd frontend
+        docker build -t gcr.io/$PROJECT_ID/nutrisense-frontend:latest .
+        docker push gcr.io/$PROJECT_ID/nutrisense-frontend:latest
+
+    - name: 'Deploy Frontend'
+      run: |
+        gcloud run deploy nutrisense-frontend \
+          --image gcr.io/$PROJECT_ID/nutrisense-frontend:latest \
+          --region $REGION \
+          --platform managed \
+          --allow-unauthenticated
